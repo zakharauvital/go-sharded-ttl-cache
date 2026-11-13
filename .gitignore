@@ -29,5 +29,12 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Profiling
+*.prof
+*.pprof
