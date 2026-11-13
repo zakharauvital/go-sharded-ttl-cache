@@ -1,7 +1,8 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
-.PHONY: *
+.PHONY: help run tidy fmt lint test bench test-coverage
 
+GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 COVERAGE_OUT_PATH := "./coverage.out"
 COVERAGE_HTML_PATH := "./coverage.html"
 
@@ -27,10 +28,11 @@ fmt: ## Run gofmt -w
 	@printf "\033[0;36mRun gofmt...\033[0m\n"
 	@gofmt -w .
 
-lint: ## Run gofmt check and go vet
+lint: ## Run gofmt check, go vet and golangci-lint
 	@printf "\033[0;36mRun lint...\033[0m\n"
 	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
 	@go vet ./...
+	@$(GOLANGCI_LINT) run ./...
 
 test: ## Run go test -race
 	@printf "\033[0;36mRun test...\033[0m\n"
