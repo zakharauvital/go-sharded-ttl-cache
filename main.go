@@ -14,22 +14,18 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	c := cache.New(ctx, 100*time.Millisecond)
-
-	c.Set("k0", "val1", 100*time.Millisecond)
-	c.Set("k1", "val1", 1000*time.Millisecond)
-
-	v1, ok := c.Get("k1")
-	if !ok {
-		log.Printf("k1 not exist\n")
+	c, err := cache.New(ctx, 100*time.Millisecond)
+	if err != nil {
+		log.Fatal(err)
 	}
-	log.Printf("cache: k1=%v\n", v1)
 
-	time.Sleep(1000 * time.Millisecond)
+	c.Set("short", "val1", 100*time.Millisecond)
+	c.Set("long", "val2", time.Second)
 
-	v1, ok = c.Get("k1")
-	if !ok {
-		log.Printf("k1 not exist\n")
+	time.Sleep(500 * time.Millisecond)
+
+	for _, key := range []string{"short", "long"} {
+		val, ok := c.Get(key)
+		log.Printf("cache: %s=%q found=%t", key, val, ok)
 	}
-	log.Printf("cache: k1=%v\n", v1)
 }

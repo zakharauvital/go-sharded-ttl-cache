@@ -102,7 +102,8 @@ func TestCache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				c := cache.New(t.Context(), tt.interval)
+				c, err := cache.New(t.Context(), tt.interval)
+				require.NoError(t, err)
 
 				for _, e := range tt.before {
 					c.Set(e.key, e.val, e.ttl)
@@ -125,9 +126,29 @@ func TestCache(t *testing.T) {
 	}
 }
 
+func TestNew_InvalidInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval time.Duration
+	}{
+		{name: "нулевой интервал", interval: 0},
+		{name: "отрицательный интервал", interval: -time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := cache.New(t.Context(), tt.interval)
+
+			require.ErrorIs(t, err, cache.ErrInvalidInterval)
+			require.Nil(t, c)
+		})
+	}
+}
+
 func TestCache_ConcurrentAccess(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		c := cache.New(t.Context(), time.Millisecond)
+		c, err := cache.New(t.Context(), time.Millisecond)
+		require.NoError(t, err)
 
 		var wg sync.WaitGroup
 		for i := range 8 {
@@ -163,7 +184,8 @@ func newFilledCache(b *testing.B, keys []string, interval time.Duration) *cache.
 	ctx, cancel := context.WithCancel(context.Background())
 	b.Cleanup(cancel)
 
-	c := cache.New(ctx, interval)
+	c, err := cache.New(ctx, interval)
+	require.NoError(b, err)
 	for _, k := range keys {
 		c.Set(k, "val", time.Hour)
 	}

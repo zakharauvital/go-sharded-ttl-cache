@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"hash/maphash"
 	"sync"
 	"time"
@@ -17,7 +18,9 @@ type shard struct {
 	data map[string]item
 }
 
-const shardCount = 32 // Количество шардов
+const shardCount = 32
+
+var ErrInvalidInterval = errors.New("cleanup interval must be positive")
 
 type Cache struct {
 	seed   maphash.Seed
@@ -40,7 +43,6 @@ func (c *Cache) cleanByTTL(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// Каждый шард блокируется отдельно и ненадолго — остальные шарды в это время доступны.
 func (s *shard) removeExpired() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -53,12 +55,12 @@ func (s *shard) removeExpired() {
 	}
 }
 
-func (c *Cache) Set(key string, val string, TTL time.Duration) {
+func (c *Cache) Set(key string, val string, ttl time.Duration) {
 	s := c.getShard(key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.data[key] = item{val, time.Now().Add(TTL)}
+	s.data[key] = item{val, time.Now().Add(ttl)}
 }
 
 func (c *Cache) Get(key string) (string, bool) {
@@ -78,7 +80,11 @@ func (c *Cache) getShard(key string) *shard {
 	return c.shards[h%shardCount]
 }
 
-func New(ctx context.Context, interval time.Duration) *Cache {
+func New(ctx context.Context, interval time.Duration) (*Cache, error) {
+	if interval <= 0 {
+		return nil, ErrInvalidInterval
+	}
+
 	c := &Cache{seed: maphash.MakeSeed()}
 
 	for i := range c.shards {
@@ -87,5 +93,5 @@ func New(ctx context.Context, interval time.Duration) *Cache {
 
 	go c.cleanByTTL(ctx, interval)
 
-	return c
+	return c, nil
 }
