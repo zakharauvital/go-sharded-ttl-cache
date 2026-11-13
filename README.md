@@ -27,17 +27,17 @@ val, ok := c.Get("key")
 - `Set(key, val, ttl)` записывает значение; повторная запись перезаписывает значение и отсчитывает TTL заново.
 - `Get(key)` возвращает значение и `true`, если ключ есть и его TTL не истёк. Просроченная запись не отдаётся, даже если очистка ещё не успела её удалить.
 
-## Запуск
-
-```sh
-go run .
-```
-
-## Тесты
+## Команды
 
 Требуется Go 1.27+ (версия из `go.mod`).
 
 ```sh
-go test -race ./...
-go test -run=^$ -bench=. -benchmem ./...
+make                # список команд
+make run            # запуск примера
+make test           # тесты с -race
+make bench          # бенчмарки
+make test-coverage  # покрытие, отчёт в coverage.html
+make lint           # gofmt и go vet
+make fmt            # форматирование
+make tidy           # go mod tidy
 ```
