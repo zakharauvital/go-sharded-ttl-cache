@@ -1,43 +1,62 @@
 # go-sharded-ttl-cache
 
-Потокобезопасный шардированный in-memory кэш с TTL на Go: 32 шарда с RWMutex, распределение ключей через maphash, фоновая очистка просроченных записей.
+[![CI](https://github.com/zakharauvital/go-sharded-ttl-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/zakharauvital/go-sharded-ttl-cache/actions/workflows/ci.yml)
 
-## Структура
+A thread-safe sharded in-memory TTL cache in Go: 32 shards guarded by `sync.RWMutex`, keys distributed with `hash/maphash`, background cleanup of expired entries.
+
+## Design
+
+- **Sharding.** A single mutex over one map becomes a bottleneck under concurrent load. The key space is split into 32 shards, each with its own `RWMutex`, so writers to different shards never block each other and readers share a lock.
+- **Hashing.** `maphash` with a per-cache random seed: fast, allocation-free, and resistant to hash flooding.
+- **Expiration.** `Get` never returns an expired entry, even if cleanup has not removed it yet. A background goroutine sweeps shards on a ticker; it locks one shard at a time, so the rest of the cache stays available during cleanup.
+- **Lifecycle.** Cleanup is bound to a `context.Context` and stops when the context is cancelled — no leaked goroutines.
+
+## Structure
 
 ```
-main.go                       — пример использования
-internal/cache/cache.go       — реализация кэша
-internal/cache/cache_test.go  — тесты и бенчмарки (package cache_test, только публичный API)
+main.go                       — usage example
+internal/cache/cache.go       — cache implementation
+internal/cache/cache_test.go  — tests and benchmarks (package cache_test, public API only)
+.github/workflows/ci.yml      — gofmt, go vet, golangci-lint, tests with -race
 ```
 
-## Использование
+## Usage
 
 ```go
 ctx, cancel := context.WithCancel(context.Background())
 defer cancel()
 
-c := cache.New(ctx, time.Second)
+c, err := cache.New(ctx, time.Second)
+if err != nil {
+	log.Fatal(err)
+}
 
 c.Set("key", "value", 5*time.Second)
 
 val, ok := c.Get("key")
 ```
 
-- `New(ctx, interval)` создаёт кэш и запускает фоновую очистку с периодом `interval`. Очистка останавливается при отмене `ctx`.
-- `Set(key, val, ttl)` записывает значение; повторная запись перезаписывает значение и отсчитывает TTL заново.
-- `Get(key)` возвращает значение и `true`, если ключ есть и его TTL не истёк. Просроченная запись не отдаётся, даже если очистка ещё не успела её удалить.
+- `New(ctx, interval)` creates a cache and starts background cleanup every `interval`. Cleanup stops when `ctx` is cancelled. A non-positive `interval` returns `ErrInvalidInterval`.
+- `Set(key, val, ttl)` stores a value; writing an existing key replaces the value and restarts its TTL.
+- `Get(key)` returns the value and `true` if the key exists and its TTL has not expired.
 
-## Команды
+## Testing
 
-Требуется Go 1.27+ (версия из `go.mod`).
+Tests are table-driven and run on `testing/synctest` with a virtual clock: TTL and cleanup timing are checked deterministically, without real sleeps or flakiness. They cover expiration boundaries (exactly at TTL, at a cleanup tick), overwrites, cleanup, invalid intervals and concurrent access under the race detector. Statement coverage is 100%.
+
+Benchmarks: parallel `Get`, `Set`, a 90/10 read-heavy mix, and `Get` during aggressive cleanup.
+
+## Commands
+
+Requires Go 1.27+ (version from `go.mod`).
 
 ```sh
-make                # список команд
-make run            # запуск примера
-make test           # тесты с -race
-make bench          # бенчмарки
-make test-coverage  # покрытие, отчёт в coverage.html
-make lint           # gofmt и go vet
-make fmt            # форматирование
+make                # list commands
+make run            # run the example
+make test           # tests with -race
+make bench          # benchmarks
+make test-coverage  # coverage, report in coverage.html
+make lint           # gofmt, go vet and golangci-lint
+make fmt            # format
 make tidy           # go mod tidy
 ```
